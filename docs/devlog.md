@@ -1,5 +1,85 @@
 # Development Log
 
+## BEVN-001 — Codebase Mapping
+
+**Date:** 2026-11-10
+**Branch:** `BEVN-001-codebase-map`
+
+### Approach
+
+Mapped the existing BrownEvents architecture as a prerequisite for the Track B migration.
+
+I deliberately separated analysis and documentation into two stages: understanding and verifying the source code first, then writing the architecture document.
+
+### Session 1 — Analysis and verification
+
+Started Codex with `BEVN-001:` and instructed it to read `AGENTS.md` and Issue #2, inspect the existing backend and frontend, propose the architecture document structure, and wait for approval before writing.
+
+The agent produced:
+
+- Layer responsibilities and entity relationships.
+- Four HTTP endpoint traces.
+- End-to-end registration walkthrough.
+- Existing test coverage inventory.
+- Unknowns and assumptions.
+- Proposed 10-section document structure.
+
+No files were modified during this session.
+
+### Human verification
+
+Before approving documentation, I asked the agent to substantiate six high-risk findings with exact source references:
+
+| Finding | Verification |
+| --- | --- |
+| Singleton `AppDbContext` | Confirmed in `Program.cs:11–18` |
+| Three blocking `.Result` calls | Confirmed in `ConferenceService.cs` and `SessionService.cs` |
+| `EnsureCreated()` instead of migrations | Confirmed in `Program.cs:54–60`; no migration files found |
+| Modal `sessionId` ignored by backend | Confirmed through frontend payload, `Attendee` model, and backend binding configuration |
+| Missing DELETE registration endpoint | Checked all three controllers |
+| Missing authentication/authorization | Checked startup configuration and controller declarations |
+
+I independently verified four critical findings using `rg` and source inspection.
+
+I also required the agent to:
+
+- Support architectural claims with file references.
+- Document both covered and uncovered test scenarios.
+- Distinguish static-analysis findings from runtime-verified behavior.
+- Preserve unknowns rather than present assumptions as facts.
+
+### Key architectural discoveries
+
+The main architectural risks identified were:
+
+- A singleton EF Core `AppDbContext` shared across scoped services.
+- Synchronous blocking of asynchronous database operations.
+- Registration persistence split across two `SaveChangesAsync()` calls without a shared explicit transaction.
+- A frontend/backend mismatch: the modal sends `sessionId`, but the backend does not persist session-level registration.
+- No direct tests of `RegistrationService` in the existing seven-test suite.
+
+These findings were documented, not fixed. Remediation is outside BEVN-001 scope.
+
+### Validation and limitations
+
+This task used static source analysis. Application builds, tests, and runtime API verification were not performed.
+
+Findings requiring runtime verification are explicitly distinguished from confirmed source-code behavior in `docs/architecture.md`.
+
+### Lessons learned
+
+The agent's initial analysis was useful, but its conclusions required independent verification. Requesting exact code snippets and checking critical claims myself helped distinguish actual implementation behavior from plausible architectural assumptions.
+
+### Outcome
+
+A second Codex session (high reasoning, fresh context) re-reviewed the document
+against issue #2. Findings: no blockers, no major issues; one minor devlog
+placeholder (this entry). Verified: ER relationships, three GET traces,
+registration persistence, negative claims (no auth, no DELETE, no migrations),
+test coverage, and document structure (204 links, anchors, Mermaid syntax).
+Unverified and left as stated: runtime query counts, concurrency outcomes,
+exception responses.
+
 ## EXT-100 — Import Track B as GitHub Issues
 
 Date: 2026-11-09. Branch: `EXT-100-import-issues`.
