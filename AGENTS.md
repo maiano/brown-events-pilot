@@ -121,3 +121,23 @@ A task is complete only when:
 - The PR references the issue.
 - CI is green from EXT-110 onward.
 - The human has reviewed and approved the result.
+
+## Devlog Guidelines
+
+Keep docs/devlog.md concise and decision-focused.
+
+For each task, document:
+
+- Approach and key agent decisions
+- Human verification and interventions
+- Important findings and corrections
+- Final validation results
+- Known limitations
+- Lessons learned
+
+Do not paste full prompts, terminal transcripts,
+temporary file paths, complete tool outputs, or
+repetitive PASS/FAIL logs into the devlog.
+
+Prefer a concise summary over an execution transcript.
+Keep detailed validation evidence in the PR when needed.
