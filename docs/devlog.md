@@ -1,5 +1,84 @@
 # Development Log
 
+## BEVN-002 — API Documentation
+
+**Date:** 2026-11-12
+**Branch:** `BEVN-002-api-documentation`
+**Issue:** [#3](https://github.com/maiano/brown-events-pilot/issues/3)
+
+### Approach
+
+The goal was to make the existing ASP.NET Core API understandable and usable through Swagger UI without changing runtime behavior.
+
+I followed an analysis → implementation → independent review → verification workflow. The agent was required to inspect the existing API contract and propose a plan before implementation.
+
+### Implementation
+
+Codex extended the existing Swashbuckle configuration:
+
+- Enabled XML documentation and documented all 12 endpoints across seven paths.
+- Added descriptions for the six entity models and their properties.
+- Documented request parameters, response schemas, existing 200/404 status codes, and six request-body examples.
+- Added an OpenAPI operation filter for anonymous `{ data: ... }` response envelopes and examples.
+- Documented existing behavior, including conference-level registration and serialization limitations.
+
+No new dependencies, API routes, authentication, validation rules, or business logic were introduced.
+
+### Independent review and human intervention
+
+A fresh Codex review identified one MAJOR issue: generated examples contained `null` elements in navigation collections, but the OpenAPI schemas rejected them.
+
+I investigated the proposed fix and required validation of both `null` and non-null entity objects to avoid overlapping `oneOf` matches.
+
+The agent implemented `NullableNavigationItemsSchemaFilter` for five affected collections, preserving the original referenced entity schemas.
+
+Subsequent validation exposed another issue: five singular navigation properties used nullable `allOf` wrappers that rejected `null`. The failing examples specifically involved `Session.speaker` and `Session.room`.
+
+I requested a targeted follow-up correction rather than accepting partially valid documentation.
+
+The final solution uses an OpenAPI 3.0-compatible null-only branch:
+
+```yaml
+oneOf:
+  - $ref: '#/components/schemas/Speaker'
+  - type: object
+    nullable: true
+    enum: [null]
+```
+
+A second schema filter corrects the five singular references. Both fixes affect only the generated OpenAPI document, not runtime serialization.
+
+### Final verification
+
+The following checks passed against the freshly generated specification:
+
+| Check | Result |
+| --- | --- |
+| Docker backend build | PASS |
+| OpenAPI 3.0 document validation | PASS |
+| Redocly CLI 2.58.2 | 0 errors, 25 warnings |
+| Response example validation | 33/33 |
+| Request example validation | 18/18 |
+| Nullable navigation schema tests | PASS |
+| API operation preservation | 12/12 |
+| Existing xUnit tests | 7/7 passed |
+| Swagger UI browser verification | PASS |
+| `git diff --check` | PASS |
+
+The schema checks used `openapi-schema-validator 0.6.3` and `openapi-spec-validator 0.7.2`. They covered valid entities, null values, mixed collections, and invalid input types.
+
+Swagger UI was verified with headless Chrome. All 12 operations expanded successfully without browser or network errors.
+
+### Known limitations
+
+- Redocly reports 25 non-blocking warnings: one missing server declaration, 12 missing `operationId` fields, and 12 missing security declarations.
+- XML documentation generation exposes 53 CS1591 warnings for public members outside the documented scope.
+- The existing EF Core Relational assembly-version conflict warning remains.
+- Runtime HTTP write scenarios were not executed against PostgreSQL. Validation covered generated contracts, examples, Swagger UI, and existing service tests.
+- EF Core lazy-loading proxies may produce additional serialization details and cycle-dependent response graphs not fully represented by the declared entity schemas.
+
+These limitations were not addressed because they do not prevent completion of the current documentation task.
+
 ## BEVN-001 — Codebase Mapping
 
 **Date:** 2026-11-10

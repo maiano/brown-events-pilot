@@ -1,6 +1,8 @@
 using BrownEvents.Api.Data;
 using BrownEvents.Api.Services;
+using BrownEvents.Api.Swagger;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
 using System.Text.Json.Serialization;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
@@ -40,7 +42,24 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "BrownEvents API",
+        Version = "v1",
+        Description = "Conferences, sessions, speakers and conference-level registrations. " +
+            "Responses include entity navigation properties; cyclic references serialize as null. " +
+            "Lazy-loading proxies can expose additional properties such as lazyLoader; " +
+            "the schemas describe entity fields, and navigation graphs vary with database and tracking state. " +
+            "Examples are illustrative; use IDs returned by this instance when trying requests."
+    });
+    options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, "BrownEvents.Api.xml"));
+    options.UseAllOfToExtendReferenceSchemas();
+    options.SchemaFilter<NullableNavigationItemsSchemaFilter>();
+    options.SchemaFilter<NullableNavigationSchemaFilter>();
+    options.OperationFilter<ApiDocumentationOperationFilter>();
+});
 
 var app = builder.Build();
 
