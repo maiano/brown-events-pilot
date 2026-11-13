@@ -1,5 +1,45 @@
 # Development Log
 
+## BEVN-003 — Technical Debt Audit
+
+**Date:** 2026-11-13
+**Branch:** `BEVN-003-technical-debt-audit`
+**Issue:** [#4](https://github.com/maiano/brown-events-pilot/issues/4)
+
+- **Approach:** I separated read-only discovery, source re-verification, and
+  approved documentation. The audit records revision `c4390a6`, covers
+  backend/frontend/infrastructure, and explicitly traces blocking async calls,
+  EF navigation loading, and CORS. Existing architecture notes were context,
+  not proof.
+- **Decisions and corrections:** We retained 22 distinct findings (2 High,
+  16 Medium, 4 Low), merged overlapping candidates, downgraded unsupported
+  security impact, and separated capacity/access-policy questions and
+  scheduled CI work from confirmed defects. Each finding has one primary area
+  and one migration-impact bucket, with practical before/during/deferred
+  recommendations.
+- **My verification:** I required exact source evidence and conditional
+  failure mechanisms before approving the audit. I reproduced TD-006 with two
+  POSTs against the same email and observed two registration rows. I
+  reproduced TD-017 in the browser: after modal registration succeeded, the
+  registrations list remained stale without a reload. I confirmed TD-001
+  (`AddSingleton<AppDbContext>`) and TD-015 (`localhost:5000`) by source only;
+  I did not run concurrent load or test from a second machine. I confirmed
+  TD-002/003 (`.Result`, synchronous `FirstOrDefault`) by source only; I did
+  not reproduce a deadlock. TD-013 I reviewed and agreed to move to a
+  deployment-policy question rather than a confirmed defect.
+- **Validation:** Re-read Issue #4 through GitHub MCP; checked
+  finding/severity/area/bucket totals, required fields, local source-link
+  targets and line references, remediation coverage, and whitespace/diff
+  scope. Only the audit and this devlog changed; no application tests or
+  builds were run for documentation.
+- **Limitations:** SQL/N+1 counts, concurrency exceptions, partial-save
+  failure injection, deployed access/logging/schema details, and load effects
+  remain unverified. No commit, push, PR, or issue changes were performed;
+  the written result awaits human review.
+- **Lesson:** Separate source mechanisms from measured effects, and
+  distinguish automatic removal of legacy APIs from behavior the Prisma
+  rewrite must explicitly preserve or correct.
+
 ## BEVN-002 — API Documentation
 
 **Date:** 2026-11-12
