@@ -1,5 +1,68 @@
 # Development Log
 
+## EXT-110 — Revive CI on GitHub Actions
+
+**Date:** 2026-11-13
+**Branch:** `EXT-110-revive-ci`
+**Issue:** [#5](https://github.com/maiano/brown-events-pilot/issues/5)
+
+### Approach
+
+Analyzed the existing GitLab pipeline before migrating the useful jobs to
+GitHub Actions. Selected two independent jobs: backend and frontend, triggered
+on pull requests and pushes to `main`, with read-only repository permissions.
+The legacy `.gitlab-ci.yml` was removed after confirming that the GitHub
+workflow covers both build and test for the current stack.
+
+### Key decisions
+
+- Combined backend restore, Release build, and xUnit tests in one job.
+- Preserved frontend `npm ci` and Vite production build in a separate job.
+- Dropped Docker publishing — no container registry is configured for this fork.
+- Kept the .NET 6 application unchanged; CI installs SDK 6.0.428 explicitly.
+- The workflow generates a temporary `global.json` before restore to pin .NET SDK 6.0.428 the runner image ships with newer SDKs that would otherwise be selected.
+- Used Ubuntu 22.04 and Node 22; the seven service tests use EF InMemory, so CI needs no PostgreSQL or Compose services.
+- Set workflow permissions to `contents: read`.
+
+### Human review
+
+I approved the migration analysis and the exact workflow YAML before the agent
+implemented anything. I rejected an earlier proposal to add Docker image
+publishing (no registry exists) and an optional dependency cache (not worth
+the complexity for a two-job workflow). I verified that the workflow does not
+touch application code or dependencies, and that `global.json` is used only to
+pin the SDK selection, not to change the application target.
+
+### Validation
+
+- **Workflow lint:** actionlint 1.7.12 — passed; whitespace checks — passed.
+- **Diff scope:** reviewed; only `.github/workflows/ci.yml`, `global.json`, and
+  removal of `.gitlab-ci.yml`.
+- **Backend (disposable .NET 6.0.428 container):** restore and Release build
+  succeeded; 7/7 tests passed with the workflow's reuse flags.
+- **Frontend (Node 22.23.1 / npm 10.9.8):** `npm ci` and production build
+  passed.
+- **GitHub Actions PR run:** [✅ both jobs passed](https://github.com/maiano/brown-events-pilot/actions/runs/43510170696). Backend: restore, Release build, 7/7 tests. Frontend: `npm ci`,
+  production build. Main-push triggering verified statically only.
+- **Observed warnings (pre-existing, not introduced):** 54 backend warnings
+  (CS1591 and EF assembly conflict); npm reported 9 vulnerabilities (4
+  moderate, 5 high). Neither was addressed in this task.
+
+### Lessons learned
+
+Installing a legacy SDK does not guarantee that it is selected — a CI-only
+`global.json` is the reliable way to pin .NET 6 when the runner image ships
+newer SDKs. Reusing the solution build when running tests (`--no-build` with
+`--no-restore`) keeps the job fast and avoids duplicate compilation. Separating backend and frontend into independent jobs gives clearer failure signals than the legacy three-stage GitLab pipeline (build → test → deploy) did for this two-job verification scope.
+
+### Limitations
+
+The backend remains on unsupported .NET 6; the workflow pins SDK 6.0.428
+accordingly. The workflow will need to be updated for NestJS during EXT-150
+(different runtime, different test runner, possibly Prisma migrations). The
+legacy GitLab pipeline was removed, but if any external mirror still uses it,
+that mirror will need its own replacement.
+
 ## BEVN-003 — Technical Debt Audit
 
 **Date:** 2026-11-13
