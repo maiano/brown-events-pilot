@@ -44,8 +44,7 @@ pin the SDK selection, not to change the application target.
   succeeded; 7/7 tests passed with the workflow's reuse flags.
 - **Frontend (Node 22.23.1 / npm 10.9.8):** `npm ci` and production build
   passed.
-- **GitHub Actions PR run:** pending — the workflow has not yet executed on
-  this branch. This is the remaining validation step before merge.
+- **GitHub Actions PR run:** [Backend job: ✅ passed / Frontend job: ✅ passed](https://github.com/maiano/brown-events-pilot/actions/runs/43510170696).
 - **Observed warnings (pre-existing, not introduced):** 54 backend warnings
   (CS1591 and EF assembly conflict); npm reported 9 vulnerabilities (4
   moderate, 5 high). Neither was addressed in this task.
