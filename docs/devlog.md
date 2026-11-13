@@ -20,10 +20,8 @@ workflow covers both build and test for the current stack.
 - Preserved frontend `npm ci` and Vite production build in a separate job.
 - Dropped Docker publishing — no container registry is configured for this fork.
 - Kept the .NET 6 application unchanged; CI installs SDK 6.0.428 explicitly.
-- Added a CI-only `global.json` to prevent newer preinstalled SDKs from being
-  selected (the runner image ships with later SDKs).
-- Used Ubuntu 22.04 and Node 22; the seven service tests use EF InMemory, so
-  CI needs no PostgreSQL or Compose services.
+- The workflow generates a temporary `global.json` before restore to pin .NET SDK 6.0.428 the runner image ships with newer SDKs that would otherwise be selected.
+- Used Ubuntu 22.04 and Node 22; the seven service tests use EF InMemory, so CI needs no PostgreSQL or Compose services.
 - Set workflow permissions to `contents: read`.
 
 ### Human review
@@ -44,7 +42,8 @@ pin the SDK selection, not to change the application target.
   succeeded; 7/7 tests passed with the workflow's reuse flags.
 - **Frontend (Node 22.23.1 / npm 10.9.8):** `npm ci` and production build
   passed.
-- **GitHub Actions PR run:** [Backend job: ✅ passed / Frontend job: ✅ passed](https://github.com/maiano/brown-events-pilot/actions/runs/43510170696).
+- **GitHub Actions PR run:** [✅ both jobs passed](https://github.com/maiano/brown-events-pilot/actions/runs/43510170696). Backend: restore, Release build, 7/7 tests. Frontend: `npm ci`,
+  production build. Main-push triggering verified statically only.
 - **Observed warnings (pre-existing, not introduced):** 54 backend warnings
   (CS1591 and EF assembly conflict); npm reported 9 vulnerabilities (4
   moderate, 5 high). Neither was addressed in this task.
@@ -54,9 +53,7 @@ pin the SDK selection, not to change the application target.
 Installing a legacy SDK does not guarantee that it is selected — a CI-only
 `global.json` is the reliable way to pin .NET 6 when the runner image ships
 newer SDKs. Reusing the solution build when running tests (`--no-build` with
-`--no-restore`) keeps the job fast and avoids duplicate compilation. Separating
-backend and frontend into independent jobs gives clearer failure signals than
-the single-stage GitLab pipeline did.
+`--no-restore`) keeps the job fast and avoids duplicate compilation. Separating backend and frontend into independent jobs gives clearer failure signals than the legacy three-stage GitLab pipeline (build → test → deploy) did for this two-job verification scope.
 
 ### Limitations
 
