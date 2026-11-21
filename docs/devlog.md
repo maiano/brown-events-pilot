@@ -1,5 +1,115 @@
 # Development Log
 
+## BEVN-101 — Sessions endpoint performance investigation
+
+**Date:** 2026-11-20
+**Branch:** `BEVN-101-fix-sessions-n-plus-one`
+**Issue:** [#6](https://github.com/maiano/brown-events-pilot/issues/6) — investigated, not fixed
+
+### What I did
+
+Treated this as an investigation, not a fix. I wanted to know whether
+`GET /api/conferences/{id}/sessions` really has N+1, measure it on real
+PostgreSQL, compare viable fixes, and decide whether a legacy-local patch is
+worth it before EXT-150 replaces the backend entirely.
+
+I told the agent to use PostgreSQL server-side statement logs instead of .NET
+instrumentation. `AppDbContext` is a singleton, so any per-request counter in
+the app is unreliable — the tracker carries state between requests and would
+hide what I'm trying to measure.
+
+### What the numbers said
+
+Cold process per fixture, isolated PostgreSQL:
+
+| Sessions | Legacy cold SELECTs | Legacy warm SELECTs |
+| ---: | ---: | ---: |
+| 0 | 1 | 1 |
+| 1 | 8 | 1 |
+| 10 | 23 | 1 |
+| 50 | 104 | 1 |
+
+At 50 sessions with 25 distinct speakers and 25 distinct rooms, 100 of the 104
+SELECTs came from lazy-loaded references and inverse collections. This is
+unambiguous N+1, and it only shows on a cold process — warm requests collapse
+to 1 because the singleton tracker already has the graph.
+
+Full measurements in
+[performance/bevn-101-investigation.md](performance/bevn-101-investigation.md).
+
+### Why neither candidate shipped
+
+**Candidate A — `Include`/`ThenInclude`.** Reduced cold 50-session count to
+five SELECTs, but the multi-hop fixture still issued 18 because the formatter
+reached navigations outside the include tree. Worse, it reordered the visible
+top-level session array — and React renders that array directly. Rejected.
+
+**Candidate B — recursive reachability plus bulk loading.** Constant seven
+SELECTs for every nonempty fixture, one for empty/unknown IDs. Preserved JSON
+in all 52 paired comparisons. But 10-session cold latency was worse in four of
+five pairs, and the effect on other endpoints sharing the singleton tracker is
+unverified. A null cycle placeholder also moved inside nested
+`attendee.registrations` arrays in six multi-hop responses. Not enough to ship.
+
+### Why I deferred
+
+The legacy backend is weeks away from being deleted. Candidate B is not a
+trivial fix — recursive reachability plus explicit EF bookkeeping — and I'd be
+writing it to throw it away in EXT-150. A is worse: it breaks ordering that the
+UI actually uses.
+
+The right move is to put the acceptance criteria into the EXT-150 spec now:
+bounded SELECT count, preserved JSON, cold/warm parity, larger connected
+fixture. That's what the investigation document contains, and that's the
+contract for the Prisma rewrite.
+
+### What I checked myself
+
+- Reproduced 104 → 1 on cold → warm by hand; the pattern is real, not an
+  artifact of the measurement setup.
+- Confirmed Candidate A's reorder is visible in the top-level array
+  `SessionList.jsx` renders, not only in nested collections.
+- Reviewed the 52 paired comparisons and agreed that undocumented nested
+  array order is not part of the contract.
+- Read both diagnostic scripts end to end and confirmed they're deterministic
+  and don't touch dev data before deciding to keep them.
+
+### What I took away
+
+N+1 in serialization is invisible on warm requests. Any measurement that
+doesn't reset the process between fixtures will under-report — and in this
+codebase, the singleton context makes that trap worse.
+
+"Fewer queries" is not "faster response". Candidate B cut SELECTs from 104 to
+7 but only gained ~12% on cold 50-session latency, and regressed at 10.
+Response size stayed at 791 KB — bounding queries leaves the serialization cost
+intact.
+
+And the biggest one: sometimes the right answer is "don't fix this here". A
+deferral with measured evidence and acceptance criteria for the target
+architecture is a better outcome than a legacy-local patch that ships an
+ordering regression and an unverified tracker interaction.
+
+### Limitations
+
+Latency was measured in Docker-local, not production. Process memory and
+production load weren't measured. Candidate B's effect on other endpoints
+sharing the tracker was not tested — that's part of why it didn't ship.
+
+### Follow-up
+
+- EXT-150 carries the acceptance criteria from the investigation document.
+- Issue #6 stays open, linked from the EXT-150 spec.
+- Diagnostic scripts are retained for migration verification, not as
+  production code.
+
+**Investigated, NOT fixed.** The human accepted the PostgreSQL baseline, reviewed both temporary prototypes, requested a reassessment of undocumented ordering, and deferred the legacy fix in favor of EXT-150. [Investigation and migration criteria](performance/bevn-101-investigation.md)
+
+- The agent used isolated PostgreSQL statement logs to measure full HTTP responses, counted connection resets separately, and checked the React display sequence independently of nested collection order.
+- The human directed the switch to server-side SQL logging before adding .NET instrumentation, accepted the smoke test and full baseline, and clarified that the issue requires preservation of returned data. Neither prototype received production approval.
+- Cold SELECTs grew from 1 to 104 across the fixture matrix. Split eager loading still lazy-loaded deeper relationships and reordered visible sessions. Bulk loading capped the measured count at seven and preserved the tested data, but 10-session cold and some warm timings regressed. Effects on other endpoints sharing the tracker remain unverified.
+- The investigation showed why measurements must cover serialization and compare cold and warm processes. Fewer queries can coexist with slower HTTP responses. Compatibility checks need complete relationship membership, visible ordering, and explicit rules for unordered nested collections.
+
 ## EXT-110 — Revive CI on GitHub Actions
 
 **Date:** 2026-11-13
